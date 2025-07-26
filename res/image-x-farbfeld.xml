@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+  <mime-type type="image/x-farbfeld">
+    <comment>Farbfeld image</comment>
+    <glob pattern="*.ff"/>
+    <glob pattern="*.ffz"/>
+    <glob pattern="*.ff.bz2"/>
+    <glob pattern="*.ffzx"/>
+    <glob pattern="*.ff.lz"/>
+    <glob pattern="*.ff.xz"/>
+    <glob pattern="*.ffbz"/>
+  </mime-type>
+</mime-info>

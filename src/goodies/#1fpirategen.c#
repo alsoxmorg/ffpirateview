@@ -1,0 +1,55 @@
+/*generate a 1fpirate from the command line*/
+/*the first 2 args are the size and the rest are 1's and 0's*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <arpa/inet.h>
+
+#define MAGIC "1fpirate"
+
+int main(int argc, char *argv[]) {
+    if (argc < 4) {
+        fprintf(stderr, "Usage: %s <width> <height> <pixels...>\n", argv[0]);
+        return 1;
+    }
+
+    uint32_t width = atoi(argv[1]);   /*My width is arg 1*/
+    uint32_t height = atoi(argv[2]);  /*My height is arg2*/
+    uint32_t total_pixels = width * height;
+    uint32_t row_bytes = (width + 7) / 8;
+    uint32_t data_size = row_bytes * height;
+
+    uint8_t *bitmap = calloc(1, data_size); /*allocate the bitmap*/
+    if (!bitmap) {
+      perror("malloc");
+      return 1;
+    }
+
+    // Process each pixel
+    fwrite(bitmap, 1, data_size, stdout);
+    for (uint32_t i = 0; i < total_pixels && i < (uint32_t)(argc - 3); i++) {
+      const char *arg = argv[3 + i]; /*any argument after 2, is a pixel*/
+      int bit = (arg[0] == '1') ? 1 : 0; /*if he arg is 1, bit=1, else 0*/
+      uint32_t byte_index = i / 8; /*What "byte" are we at*/
+      uint32_t bit_index = 7 - (i % 8); /*what "bit" are we at in current byte*/
+      bitmap[byte_index] |= (bit << bit_index);
+    }
+
+    /* Write magic, to the stdout */
+    fwrite(MAGIC, 1, 8, stdout);
+
+    /* Write width and height in big endian (to stdout) */
+    uint32_t net_width = htonl(width);
+    uint32_t net_height = htonl(height);
+    fwrite(&net_width, 4, 1, stdout);
+    fwrite(&net_height, 4, 1, stdout);
+
+    /* Write bitmap */
+    fwrite(bitmap, 1, data_size, stdout);
+
+    /*cleanup*/
+    free(bitmap);
+    return 0;
+}

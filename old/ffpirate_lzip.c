@@ -1,0 +1,367 @@
+#define SDL_FARBFELD_IMPLEMENTATION
+#include "SDL_Farbfeld.h"
+
+#include <SDL2/SDL.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+
+int is_pipe;
+
+/* Handle both plain and .lzip compressed Farbeld files */
+static FILE *open_image_file(const char *filename) {
+    const char *suffix_ffz = ".ffz";
+    const char *suffix_fflz = ".ff.lz";
+    size_t len = strlen(filename);
+    is_pipe = 0;
+
+    if ((len > 4 && strcmp(filename + len - 4, suffix_ffz) == 0) ||
+        (len > 6 && strcmp(filename + len - 6, suffix_fflz) == 0)) {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "lzip -dc '%s'", filename);
+        FILE *fp = popen(cmd, "r");
+        if (!fp) {
+            fprintf(stderr, "popen failed for '%s': %s", filename, strerror(errno));
+            return NULL;
+        }
+        is_pipe = 1;
+        return fp;
+    } else {
+        int is_pipe = 0;
+	FILE *fp = open_image_file(filename);
+        if (!fp) {
+            fprintf(stderr, "fopen failed for '%s': %s", filename, strerror(errno));
+            return NULL;
+        }
+        return fp;
+    }
+}
+
+#include <stdlib.h>
+#include <string.h>
+
+#define INITIAL_WINDOW_WIDTH 800
+#define INITIAL_WINDOW_HEIGHT 600
+#define ZOOM_STEP 0.1f
+#define MIN_ZOOM 0.1f
+#define MAX_ZOOM 10.0f
+
+#define MAGIC1F "1bfarbf\0"
+#define HEADER_FORMAT "farbfeld########"
+
+int is_fullscreen = 0;
+int show_saved_bar = 0;
+Uint32 saved_bar_start = 0;
+const Uint32 saved_bar_duration = 2000;  // 2 seconds
+
+int test_magic(char *argv); //look for magic and return 1 for farbfeld and 2 for 1f
+
+int test_magic(char *argv) {
+  FILE * fp = fopen(argv, "rb");
+  uint8_t hdr[17];
+
+  if (fread(hdr, 1, strlen(HEADER_FORMAT), fp) != strlen(HEADER_FORMAT))
+    return -1;
+  if (memcmp(hdr, "farbfeld", 8))
+    {
+      printf("its a farbfeld\n");
+      return 1;
+    }
+  else if (memcmp(hdr, "1bfarbf\0" ,8))
+    {
+      printf("its a 1b farbfeld\n");
+      return 2;
+    }
+}
+
+
+void SDL_SaveFarbfeldSurface(SDL_Surface *surface, const char *filename) {
+  if (!surface || !filename) {
+    fprintf(stderr, "Invalid arguments to SDL_SaveFarbfeldSurface\n");
+    return;
+  }
+
+  FILE *fp = fopen(filename, "wb");
+  if (!fp) {
+    perror("fopen");
+    return;
+  }
+
+  // Write "farbfeld" magic
+  fwrite("farbfeld", 1, 8, fp);
+
+  // Write width and height in big-endian
+  uint32_t width = surface->w;
+  uint32_t height = surface->h;
+
+  for (int shift = 24; shift >= 0; shift -= 8)
+    fputc((width >> shift) & 0xFF, fp);
+  for (int shift = 24; shift >= 0; shift -= 8)
+    fputc((height >> shift) & 0xFF, fp);
+
+  // Convert and write pixel data: 4x 16-bit BE per pixel
+  SDL_LockSurface(surface);
+
+  for (int y = 0; y < height; y++) {
+    uint32_t *row = (uint32_t *)((uint8_t *)surface->pixels + y * surface->pitch);
+    for (int x = 0; x < width; x++) {
+      uint8_t r, g, b, a;
+      SDL_GetRGBA(row[x], surface->format, &r, &g, &b, &a);
+      uint16_t r16 = r << 8;
+      uint16_t g16 = g << 8;
+      uint16_t b16 = b << 8;
+      uint16_t a16 = a << 8;
+
+      uint16_t components[4] = {r16, g16, b16, a16};
+      for (int i = 0; i < 4; i++) {
+	fputc(components[i] >> 8, fp);
+	fputc(components[i] & 0xFF, fp);
+      }
+    }
+  }
+
+  SDL_UnlockSurface(surface);
+  if (is_pipe) pclose(fp); else fclose(fp);
+}
+
+void SaveFarbfeldSurface(SDL_Surface *surface, const char *filename) {
+  char newname[1024];
+  snprintf(newname, sizeof(newname), "%s.new.ff", filename);
+  SDL_SaveFarbfeldSurface(surface, newname);
+  printf("Saved to %s\n", newname);
+}
+
+SDL_Surface *RotateSurface90(SDL_Surface *src) {
+  SDL_Surface *rotated = SDL_CreateRGBSurfaceWithFormat(0, src->h, src->w, 32, src->format->format);
+  if (!rotated) return NULL;
+
+  SDL_LockSurface(src);
+  SDL_LockSurface(rotated);
+
+  Uint32 *srcPixels = (Uint32 *)src->pixels;
+  Uint32 *dstPixels = (Uint32 *)rotated->pixels;
+  for (int y = 0; y < src->h; y++) {
+    for (int x = 0; x < src->w; x++) {
+      dstPixels[x * rotated->w + (rotated->w - y - 1)] = srcPixels[y * src->w + x];
+    }
+  }
+
+  SDL_UnlockSurface(src);
+  SDL_UnlockSurface(rotated);
+  return rotated;
+}
+
+SDL_Surface *FlipSurface(SDL_Surface *src, int horizontal) {
+  SDL_Surface *flipped = SDL_CreateRGBSurfaceWithFormat(0, src->w, src->h, 32, src->format->format);
+  if (!flipped) return NULL;
+
+  SDL_LockSurface(src);
+  SDL_LockSurface(flipped);
+
+  Uint32 *srcPixels = (Uint32 *)src->pixels;
+  Uint32 *dstPixels = (Uint32 *)flipped->pixels;
+  for (int y = 0; y < src->h; y++) {
+    for (int x = 0; x < src->w; x++) {
+      int dstX = horizontal ? (src->w - x - 1) : x;
+      int dstY = horizontal ? y : (src->h - y - 1);
+      dstPixels[dstY * src->w + dstX] = srcPixels[y * src->w + x];
+    }
+  }
+
+  SDL_UnlockSurface(src);
+  SDL_UnlockSurface(flipped);
+  return flipped;
+}
+
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <image.ff>\n", argv[0]);
+    return 1;
+  }
+
+  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
+    return 1;
+  }
+
+  SDL_Window *window = SDL_CreateWindow("ffPirateView",
+					SDL_WINDOWPOS_CENTERED,
+					SDL_WINDOWPOS_CENTERED,
+					INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT,
+					SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+  if (!window) {
+    fprintf(stderr, "Could not create window: %s\n", SDL_GetError());
+    SDL_Quit();
+    return 1;
+  }
+
+  SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+  if (!renderer) {
+    fprintf(stderr, "Could not create renderer: %s\n", SDL_GetError());
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 1;
+  }
+
+  if(test_magic(argv[1]) == 2)
+    {
+      printf("its a 1bit Farbfeld! bailing!\n");
+      exit(2);
+    }
+  SDL_Surface *surface = SDL_LoadFarbfeldSurface(argv[1]);
+  if (!surface) {
+    fprintf(stderr, "Could not load farbfeld image: %s\n", SDL_GetError());
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 1;
+  }
+
+  SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+  if (!texture) {
+    fprintf(stderr, "Could not create texture: %s\n", SDL_GetError());
+    SDL_FreeSurface(surface);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 1;
+  }
+
+  int quit = 0;
+  SDL_Event event;
+  float zoom = 1.0f;
+  int panX = 0, panY = 0;
+  int dragging = 0;
+  int lastMouseX = 0, lastMouseY = 0;
+
+  while (!quit) {
+    while (SDL_PollEvent(&event)) {
+      switch (event.type) {
+      case SDL_QUIT:
+	quit = 1;
+	break;
+      case SDL_KEYDOWN:
+	switch (event.key.keysym.sym) {
+	case SDLK_ESCAPE:
+	  quit = 1;
+	  break;
+	case SDLK_UP:
+	  panY += 20;
+	  break;
+	case SDLK_DOWN:
+	  panY -= 20;
+	  break;
+	case SDLK_LEFT:
+	  panX += 20;
+	  break;
+	case SDLK_RIGHT:
+	  panX -= 20;
+	  break;
+	case SDLK_EQUALS:
+	case SDLK_KP_PLUS:
+	  zoom += ZOOM_STEP;
+	  if (zoom > MAX_ZOOM) zoom = MAX_ZOOM;
+	  SDL_RenderSetScale(renderer, zoom, zoom);
+	  break;
+	case SDLK_MINUS:
+	case SDLK_KP_MINUS:
+	  zoom -= ZOOM_STEP;
+	  if (zoom < MIN_ZOOM) zoom = MIN_ZOOM;
+	  SDL_RenderSetScale(renderer, zoom, zoom);
+	  break;
+	case SDLK_r: {
+	  SDL_Surface *rot = RotateSurface90(surface);
+	  if (rot) {
+	    SDL_FreeSurface(surface);
+	    SDL_DestroyTexture(texture);
+	    surface = rot;
+	    texture = SDL_CreateTextureFromSurface(renderer, surface);
+	  }
+	  break;
+	}
+	case SDLK_f:
+	  is_fullscreen = !is_fullscreen;
+	  if (is_fullscreen) {
+	    SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+	  } else {
+	    //SDL_SetWindowFullscreen(window, 0);
+	    SDL_SetWindowFullscreen(window, 0);
+	    SDL_SetWindowSize(window, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+	    SDL_SetWindowPosition(window, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+	    //#define INITIAL_WINDOW_WIDTH 800
+            //#define INITIAL_WINDOW_HEIGHT 600
+	  }
+	  break;
+	case SDLK_h:
+	case SDLK_v: {
+	  int horiz = event.key.keysym.sym == SDLK_h;
+	  SDL_Surface *flp = FlipSurface(surface, horiz);
+	  if (flp) {
+	    SDL_FreeSurface(surface);
+	    SDL_DestroyTexture(texture);
+	    surface = flp;
+	    texture = SDL_CreateTextureFromSurface(renderer, surface);
+	  }
+	  break;
+	}
+	case SDLK_s:
+	  show_saved_bar = 1;
+	  saved_bar_start = SDL_GetTicks();
+	  SaveFarbfeldSurface(surface, argv[1]);
+	  break;
+	}
+	break;
+      case SDL_MOUSEBUTTONDOWN:
+	if (event.button.button == SDL_BUTTON_LEFT) {
+	  dragging = 1;
+	  lastMouseX = event.button.x;
+	  lastMouseY = event.button.y;
+	}
+	break;
+      case SDL_MOUSEBUTTONUP:
+	if (event.button.button == SDL_BUTTON_LEFT) {
+	  dragging = 0;
+	}
+	break;
+      case SDL_MOUSEMOTION:
+	if (dragging) {
+	  panX += event.motion.x - lastMouseX;
+	  panY += event.motion.y - lastMouseY;
+	  lastMouseX = event.motion.x;
+	  lastMouseY = event.motion.y;
+	}
+	break;
+      }
+    }
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    SDL_Rect dstRect = { panX, panY, 0, 0 };
+    SDL_QueryTexture(texture, NULL, NULL, &dstRect.w, &dstRect.h);
+    if (show_saved_bar) {
+      Uint32 now = SDL_GetTicks();
+      if (now - saved_bar_start > saved_bar_duration) {
+        show_saved_bar = 0;
+      } else {
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);  // green
+        SDL_Rect bar = {10, 2, 200, 20};  // top bar
+        SDL_RenderFillRect(renderer, &bar);
+      }
+    }
+    SDL_RenderCopy(renderer, texture, NULL, &dstRect);
+
+    SDL_RenderPresent(renderer);
+  }
+
+  SDL_DestroyTexture(texture);
+  SDL_FreeSurface(surface);
+  SDL_DestroyRenderer(renderer);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+  return 0;
+}

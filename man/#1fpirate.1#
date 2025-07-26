@@ -1,0 +1,75 @@
+.TH 1FPIRATE 1 "May 2025" "1fpirate" "1fpirate image format"
+
+.SH NAME
+1fpirate \- A minimalist 1-bit image format for line art and monochrome graphics
+
+.SH SYNOPSIS
+.B 1fpirate
+[\fIFILE.1f\fR]
+
+.SH DESCRIPTION
+.B 1fpirate
+is a simple 1-bit-per-pixel raster image format derived from farbfeld,
+designed for high-contrast, monochrome images such as scanned
+documents, technical drawings, manga-style comics, and coloring book
+pages.
+
+It is optimized for images where full color is unnecessary, enabling
+high compression and fast streaming. A growing collection of tools
+supports conversion from standard formats, including streaming
+downscalers and a GIMP plugin for both loading and exporting
+`.1f`/`.1ff` files.
+
+
+.SH USAGE
+To launch:
+.IP
+.B 1fpirate image.1f
+
+.SH FEATURES
+
+.TP
+.B Arrow keys
+Pan the image in the corresponding direction.
+
+.TP
+.B Mouse drag
+Also pans the image.
+
+.TP
+.B f
+Toggle fullscreen (windowed) mode.
+
+.TP
+.B r
+Rotate image 90 degrees clockwise.
+
+.TP
+.B h
+Flip image horizontally.
+
+.TP
+.B v
+Flip image vertically.
+
+.TP
+.B s
+Save current image to a new file. The filename will be the original filename
+with \fB"new.ff"\fR appended.
+
+.TP
+.B q / Esc
+Quit the viewer.
+
+.SH NOTES
+Compressed farbfeld files such as \fB.ffz\fR, \fB.ff.lz\fR, \fB.ffbz\fR, or \fB.ff.xz\fR
+should be launched via the \fBzviewer.sh\fR script, which will decompress and call
+ffpirateview as needed.
+
+.SH AUTHOR
+Written by a pirate who loves colors.
+
+.SH SEE ALSO
+.BR convert (1),
+.BR farbfeld (5),
+.BR zviewer.sh (1)

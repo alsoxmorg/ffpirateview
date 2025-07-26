@@ -1,0 +1,274 @@
+/*
+ * Combined farbfeld + 1f (1-bit farbfeld) SDL viewer
+ * Reuses same binary for viewing either format
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <SDL2/SDL.h>
+
+#define INITIAL_WINDOW_WIDTH 800
+#define INITIAL_WINDOW_HEIGHT 600
+#define ZOOM_STEP 0.1f
+#define MIN_ZOOM 0.1f
+#define MAX_ZOOM 10.0f
+
+#define MAGIC_1F "1fpirate"
+#define MAGIC_FF "farbfeld"
+#define MAGIC_LEN 8
+
+int file_type = 0; // 0 = unknown, 1 = farbfeld, 2 = 1f
+uint32_t width, height;
+uint8_t *bitmap = NULL;     // For 1f
+uint32_t *pixels = NULL;    // For SDL
+
+int is_fullscreen = 0;
+int show_saved_bar = 0;
+Uint32 saved_bar_start = 0;
+const Uint32 saved_bar_duration = 2000;  // 2 seconds
+FILE *fp = NULL;
+uint32_t width, height;
+int panX, panY;
+
+
+int detect_file_type(FILE *fp) {
+  char magic[MAGIC_LEN];
+  rewind(fp);
+  if (fread(magic, 1, MAGIC_LEN, fp) != MAGIC_LEN)
+    return 0;
+
+  if (memcmp(magic, MAGIC_FF, MAGIC_LEN) == 0)
+    return 1;
+  else if (memcmp(magic, MAGIC_1F, MAGIC_LEN) == 0)
+    return 2;
+
+  return 0;
+}
+
+SDL_Surface *SDL_Load1fSurface(FILE *fp) {
+  fread(&width, 4, 1, fp);
+  fread(&height, 4, 1, fp);
+  width = ntohl(width);
+  height = ntohl(height);
+
+  int row_bytes = (width + 7) / 8;
+  bitmap = malloc(row_bytes * height);
+  if (!bitmap) return NULL;
+  fread(bitmap, 1, row_bytes * height, fp);
+
+  SDL_Surface *surf = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
+  if (!surf) return NULL;
+
+  uint32_t *dst = surf->pixels;
+  for (uint32_t y = 0; y < height; y++) {
+    for (uint32_t x = 0; x < width; x++) {
+      int byte_index = y * row_bytes + (x / 8);
+      int bit_index = 7 - (x % 8);
+      int bit = (bitmap[byte_index] >> bit_index) & 1;
+      uint32_t color = bit ? 0xFF000000 : 0xFFFFFFFF;
+      dst[y * width + x] = color;
+    }
+  }
+
+  return surf;
+}
+
+SDL_Surface *SDL_LoadFarbfeldSurface(FILE *fp) {
+  fread(&width, 4, 1, fp);
+  fread(&height, 4, 1, fp);
+  width = ntohl(width);
+  height = ntohl(height);
+
+  SDL_Surface *surf = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32);
+  if (!surf) return NULL;
+
+  uint8_t *dst = surf->pixels;
+  for (uint32_t i = 0; i < width * height; i++) {
+    uint16_t r, g, b, a;
+    fread(&r, 2, 1, fp); r = ntohs(r);
+    fread(&g, 2, 1, fp); g = ntohs(g);
+    fread(&b, 2, 1, fp); b = ntohs(b);
+    fread(&a, 2, 1, fp); a = ntohs(a);
+
+    dst[i * 4 + 0] = r >> 8;
+    dst[i * 4 + 1] = g >> 8;
+    dst[i * 4 + 2] = b >> 8;
+    dst[i * 4 + 3] = a >> 8;
+  }
+
+  return surf;
+}
+
+int main(int argc, char **argv) {
+  float zoom = 1.0f;
+  int panX = 0, panY = 0;
+  SDL_Event event;
+  int dragging = 0;
+  int lastMouseX = 0, lastMouseY = 0;
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <image.ff|image.1f>\n", argv[0]);
+    return 1;
+  }
+
+  FILE *fp = fopen(argv[1], "rb");
+  if (!fp) {
+    perror("fopen");
+    return 1;
+  }
+
+  file_type = detect_file_type(fp);
+  if (file_type == 0) {
+    fprintf(stderr, "Unknown image format\n");
+    fclose(fp);
+    return 1;
+  }
+
+  SDL_Init(SDL_INIT_VIDEO);
+  SDL_Window *win = SDL_CreateWindow("ffpirate+1f", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+				     800, 600, SDL_WINDOW_RESIZABLE);
+  SDL_Renderer *renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+
+  SDL_Surface *surf = NULL;
+  if (file_type == 1)
+    surf = SDL_LoadFarbfeldSurface(fp);
+  else if (file_type == 2)
+    surf = SDL_Load1fSurface(fp);
+
+  fclose(fp);
+
+  if (!surf) {
+    fprintf(stderr, "Failed to load image\n");
+    return 1;
+  }
+
+  SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surf);
+  SDL_FreeSurface(surf);
+
+  SDL_Event e;
+  int running = 1;
+  int quit = 0;
+
+  /*while (running) {
+    while (SDL_PollEvent(&e)) {
+    if (e.type == SDL_QUIT)
+    running = 0;
+    }
+
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, texture, NULL, NULL);
+    SDL_RenderPresent(renderer);
+    }*/
+
+  while (!quit) {
+    while (SDL_PollEvent(&event)) {
+      switch (event.type) {
+      case SDL_QUIT:
+        quit = 1;
+        break;
+      case SDL_KEYDOWN:
+	switch (event.key.keysym.sym) {
+	case SDLK_ESCAPE:
+          quit = 1;
+	  break;
+        case SDLK_q:
+          quit = 1;
+	  break;
+        case SDLK_UP:
+          panY += 20;
+          break;
+	case SDLK_DOWN:
+          panY -= 20;
+          break;
+	case SDLK_LEFT:
+          panX += 20;
+          break;
+	case SDLK_RIGHT:
+          panX -= 20;
+          break;
+	case SDLK_EQUALS:
+	case SDLK_KP_PLUS:
+          zoom += ZOOM_STEP;
+          if (zoom > MAX_ZOOM) zoom = MAX_ZOOM;
+          SDL_RenderSetScale(renderer, zoom, zoom);
+          break;
+	case SDLK_MINUS:
+	case SDLK_KP_MINUS:
+          zoom -= ZOOM_STEP;
+          if (zoom < MIN_ZOOM) zoom = MIN_ZOOM;
+          SDL_RenderSetScale(renderer, zoom, zoom);
+          break;
+	case SDLK_r: {
+          SDL_Surface *rot = RotateSurface90(surface);
+          if (rot) {
+            SDL_FreeSurface(surface);
+            SDL_DestroyTexture(texture);
+            surface = rot;
+            texture = SDL_CreateTextureFromSurface(renderer, surface);
+          }
+          break;
+	}
+        case SDLK_f:
+          is_fullscreen = !is_fullscreen;
+          if (is_fullscreen) {
+            SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+          } else {
+            //SDL_SetWindowFullscreen(window, 0);
+            SDL_SetWindowFullscreen(window, 0);
+            SDL_SetWindowSize(window, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+            SDL_SetWindowPosition(window, INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT);
+            //#define INITIAL_WINDOW_WIDTH 800
+            //#define INITIAL_WINDOW_HEIGHT 600
+          }
+          break;
+	case SDLK_h:
+	case SDLK_v: {
+          int horiz = event.key.keysym.sym == SDLK_h;
+          SDL_Surface *flp = FlipSurface(surface, horiz);
+          if (flp) {
+            SDL_FreeSurface(surface);
+	    SDL_DestroyTexture(texture);
+            surface = flp;
+            //texture = SDL_CreateTextureFromSurface(renderer, surface);
+          }
+          break;
+	}
+        case SDLK_s:
+          show_saved_bar = 1;
+          saved_bar_start = SDL_GetTicks();
+          //SaveFarbfeldSurface(surface, argv[1]);
+          break;
+	}
+        break;
+      case SDL_MOUSEBUTTONDOWN:
+	if (event.button.button == SDL_BUTTON_LEFT) {
+          dragging = 1;
+          lastMouseX = event.button.x;
+          lastMouseY = event.button.y;
+	}
+        break;
+      case SDL_MOUSEBUTTONUP:
+	if (event.button.button == SDL_BUTTON_LEFT) {
+          dragging = 0;
+	}
+        break;
+      case SDL_MOUSEMOTION:
+	if (dragging) {
+          panX += event.motion.x - lastMouseX;
+          panY += event.motion.y - lastMouseY;
+          lastMouseX = event.motion.x;
+          lastMouseY = event.motion.y;
+	}
+        break;
+      }
+    }
+
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(win);
+    SDL_Quit();
+    return 0;
+  }
+}
