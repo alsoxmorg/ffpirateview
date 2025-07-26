@@ -35,4 +35,7 @@
       for incredibly small drawings, documents, and raster line art.  It can 
       be further compressed using algorithms like bzip2 to reduce the size even 
       more.
-
+## Conversion tools
+       ff21f - convert farbeld file to 1fpirate  echo file.ff | ff21f > file.1fpirate
+       png21f - convert png's to 1fpirate (use dithering)
+       pirate1ffix - Fix magic header on 1fpirate files. (if corrupted)
