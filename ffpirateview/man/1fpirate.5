@@ -1,0 +1,71 @@
+.TH 1FPIRATE 5 "June 2025" "1fpirate format" "File Formats"
+
+.SH NAME
+1fpirate \- a simple, lossless 1-bit image format based on farbfeld
+
+.SH SYNOPSIS
+.B 1fpirate
+
+.SH DESCRIPTION
+The
+.B 1fpirate
+format is a minimal, uncompressed 1-bit per pixel raster image format. It is structurally similar to
+.BR farbfeld (5),
+but uses a single bit to represent each pixel. It is designed for scanned documents, manga, pixel art, and monochrome graphics.
+
+All integers are stored in big-endian byte order.
+
+.SH FILE FORMAT
+A
+.B 1fpirate
+file consists of:
+
+.TP
+.B Bytes 0-7
+The ASCII string
+.BR "1fpirate"
+(this is the magic number).
+
+.TP
+.B Bytes 8-11
+Image width in pixels (unsigned 32-bit integer, big-endian)
+
+.TP
+.B Bytes 12-15
+Image height in pixels (unsigned 32-bit integer, big-endian)
+
+.TP
+.B Bytes 16...
+Image pixel data, stored as 1 bit per pixel, left-to-right, top-to-bottom.
+Each row is padded to the next byte boundary.
+
+Each bit represents one pixel:
+.IP
+0 = white, 1 = black
+
+Bits are packed MSB first (bit 7 is leftmost pixel of the byte).
+
+.SH EXAMPLES
+Write a 1fpirate file manually for a 16x16 checkerboard:
+.IP
+Use 16 (width) and 16 (height), and write 32 bytes of pattern data (16 rows × 2 bytes/row).
+
+.IP
+To decode:
+.RS
+.br
+Read the magic, dimensions, and unpack the bits row-wise.
+.br
+Convert each bit to either black (1) or white (0).
+.RE
+
+.SH SEE ALSO
+.BR farbfeld (5),
+.BR ffpirate (1),
+.BR 1fpirate (1)
+
+.SH AUTHORS
+Tim Cooper and contributors.
+
+.SH BUGS
+The format does not support metadata or alpha transparency.

@@ -1,0 +1,85 @@
+.TH FFPIRATEVIEW 1 "May 2025" "ffpirateview" "Farbfeld Image Viewer"
+
+.SH NAME
+ffpirateview \- simple viewer for farbfeld (.ff), and 1fpirate image files
+
+.SH SYNOPSIS
+.B ffpirate
+[\fIFF_FILE\fR]
+
+.B zviewer.sh
+\fIFF_FILE\fR]
+
+.B gimp_open.sh
+\fIFF_FILE\fR]
+
+.SH DESCRIPTION
+.B ffpirate
+is a lightweight SDL2-based image viewer designed to display
+uncompressed or decompressed Farbfeld image files. It can also
+directly view 1fpirate image files. It supports basic interaction and
+image manipulation.  It also includes a helper script, "zviewer.sh"
+which allows you to open a file compressed in a number of different
+formats.  The formats for zviewer.sh , are bzip2 (ff.bz2, ffbz), lzip
+(ff.lz, ffz), (ff.xz, ffxz).  It can also view jpeg, png, and webp by
+converting them to farbfeld before viewing.  This conversion by
+zviewer relies on external farbfeld tools, 2ff (jpg2ff, png2ff).
+
+gimp_open.sh is a helper script to allow you to open ff files, (and
+the above compressed instances) in gimp without the plugin.  It does
+this by using ff2png from the farbfeld tools, to convert it go a png,
+then opens it in gimp.  This not ideal, but until the gimp-farbfeld
+plugin is updated, this will suffice.
+
+.SH USAGE
+To launch:
+.IP
+.B ffpirate image.ff, or cat image.ff | ffpirate
+
+.SH FEATURES
+
+.TP
+.B Arrow keys
+Pan the image in the corresponding direction.
+
+.TP
+.B Mouse drag
+Also pans the image.
+
+.TP
+.B f
+Toggle fullscreen (windowed) mode.
+
+.TP
+.B r
+Rotate image 90 degrees clockwise.
+
+.TP
+.B h
+Flip image horizontally.
+
+.TP
+.B v
+Flip image vertically.
+
+.TP
+.B s
+Save current image to a new (farbfeld) file. The filename will be the
+original filename with \fB"new.ff"\fR appended.  1fpirate files will also be saved as farbfeld, so you will need to reconvert them.  For specific gui saving of 1fpirate, consider using the even lighter "1fpirate" program.
+
+.TP
+.B q / Esc
+Quit the viewer.
+
+.SH NOTES
+Compressed farbfeld files such as \fB.ffz\fR, \fB.ff.lz\fR, \fB.ffbz\fR, or \fB.ff.xz\fR
+should be launched via the \fBzviewer.sh\fR script, which will decompress and call
+ffpirateview as needed.
+
+.SH AUTHOR
+Written by a pirate who loves colors.
+
+.SH SEE ALSO
+.BR convert (1),
+.BR farbfeld (5),
+.BR zviewer.sh (1)

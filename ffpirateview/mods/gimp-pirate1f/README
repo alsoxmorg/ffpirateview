@@ -1,0 +1,9 @@
+What is this?
+-------
+This is a gimp plug-in modeled after gimp-farbfeld
+(https://github.com/ids1024/gimp-farbfeld)
+
+Install
+-------
+
+Build with "make", install to user home directory with "make install".
