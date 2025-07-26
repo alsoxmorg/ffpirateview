@@ -12,12 +12,27 @@
        gimp_open.sh FF_FILE]
 
 ## DESCRIPTION
-       ffpirate is a lightweight SDL2-based image viewer designed  to  display
-       uncompressed or decompressed Farbfeld image files. It can also directly
-       view  1fpirate image files. It supports basic interaction and image manipulation.  
-       It also includes a helper script, "zviewer.sh"  which  allows  you  to 
-       open a file compressed in a number of different formats.  The formats 
-       for zviewer.sh , are bzip2  (ff.bz2,  ffbz),  lzip  (ff.lz, ffz),  
-       (ff.xz, ffxz).  It can also view jpeg, png, and webp by converting them
-       to farbfeld before viewing.  This conversion by zviewer relies on 
-       external farbfeld tools, 2ff (jpg2ff, png2ff).
+       ffpirate is a lightweight SDL2-based image viewer designed to display 
+       uncompressed or decompressed Farbfeld image files. It can also directly 
+       view 1fpirate image files and supports basic interaction and image manipulation.
+       It can save 1fpirate files as farbfeld (conversion)
+
+       It includes a helper script, zviewer.sh, which allows you to open files
+       compressed in a variety of formats. Supported formats for zviewer.sh include:
+
+       - bzip2 (.ff.bz2, .ffbz)
+       - lzip (.ff.lz, .ffz)
+       - xz (.ff.xz, .ffxz)
+
+       Additionally, it can view JPEG, PNG, and WebP images by converting them 
+       to Farbfeld format before viewing. This conversion, performed by zviewer.sh, 
+       relies on external Farbfeld tools such as 2ff (e.g., jpg2ff, png2ff).
+       
+## 1fpirate
+      1fpirate is a single-bit-per-pixel image format modeled after farbfeld. 
+      It includes an 8-byte magic header, a width, a height, and pixel data.  
+      The pixel data is stored as bits within bytes. This should, in theory, allow 
+      for incredibly small drawings, documents, and raster line art.  It can 
+      be further compressed using algorithms like bzip2 to reduce the size even 
+      more.
+
