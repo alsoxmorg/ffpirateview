@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=ffPirateV
-Comment=View Farbfeld images with zviewer.sh
-Exec=zviewer.sh %f
-MimeType=image/x-farbfeld;
-Terminal=false
-Type=Application
-Icon=media-photo
-Categories=Graphics;Viewer;
