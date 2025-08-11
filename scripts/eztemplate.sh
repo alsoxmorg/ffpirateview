@@ -16,7 +16,6 @@ echo "
 Full description here.
 .Sh SEE ALSO
 .Xr othercommand 1"
-#EOF
         ;;
 
     -ms)
@@ -167,12 +166,13 @@ Write your introduction here.
 
 !! This be a subheader Yaaar!
    ~ These be bullets, arrg
-     ` These be other bullets! ha har
+     \` These be other bullets! ha har
 This is normal text.
 {you can put off color text in here!}
 | Turn | Yer | Tables |
 :8 spanish ladies for single line comments ::
 "
+	;;
     -resume) # resume in roff
 	echo "
 .\" Resume created on $(date \"+%B %d, %Y\")
@@ -231,7 +231,56 @@ Graduation Year
 .sp
 Available upon request.
 "
-    ;;
+	;;
+    -html)
+	echo "
+<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"UTF-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>New Document</title>
+</head>
+<body>
+    <h1>Title of Document</h1>
+    <p>Write your introduction here.</p>
+
+    <h2>Main Content</h2>
+    <p>Your main content goes here.</p>
+
+    <h2>Conclusion</h2>
+    <p>Final thoughts here.</p>
+</body>
+</html>"
+	
+	;;
+    -json)
+	echo "
+{
+    \"_comment\": \"This is a human-editable JSON template. Remove or ignore _comment fields.\",
+    \"title\": \"Your document title\",
+    \"author\": \"Your name\",
+    \"date\": \"$(date \"+%Y-%m-%d\")\",
+    \"sections\": [
+        {
+            \"heading\": \"Introduction\",
+            \"content\": \"Write your introduction here.\"
+        },
+        {
+            \"heading\": \"Main Content\",
+            \"content\": \"Your main content goes here.\"
+        },
+        {
+            \"heading\": \"Conclusion\",
+            \"content\": \"Final thoughts here.\"
+        }
+    ]
+}
+"
+	;;
+    -yaml) # eww
+	echo "eww gross dont use this format."
+	;;
     *)
         echo "Usage: $0 -type > (file)"
 	echo "Types are: -mdoc, -ms -man -org -tex -roff -c99 -farbfeld -1fpirate -md -arrg -resume"
